@@ -1,0 +1,47 @@
+{
+  "name": "dss",
+  "version": "1.1.0",
+  "description": "DSS (Distributed Storage System) — Desktop Application",
+  "main": "src/main.js",
+  "scripts": {
+    "start": "electron .",
+    "build:mac": "electron-builder --mac",
+    "build:win": "electron-builder --win",
+    "build:linux": "electron-builder --linux"
+  },
+  "build": {
+    "appId": "com.dss.app",
+    "productName": "DSS",
+    "copyright": "DSS Contributors",
+    "directories": { "output": "dist" },
+    "files": ["src/**/*"],
+    "extraResources": [
+      { "from": "../", "to": "dss", "filter": [
+          "server/**", "client/**", "shared/**", "requirements.txt",
+          "pyproject.toml", "**/__init__.py"
+        ]
+      },
+      { "from": "../ui/.next/standalone", "to": "ui-standalone", "filter": ["**/*"] }
+    ],
+    "mac": {
+      "category": "public.app-category.utilities",
+      "target": [{ "target": "dmg", "arch": ["x64", "arm64"] }]
+    },
+    "win": {
+      "target": [{ "target": "nsis", "arch": ["x64"] }]
+    },
+    "linux": {
+      "target": [{ "target": "AppImage", "arch": ["x64"] }],
+      "category": "Utility"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    }
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "electron": "^31.0.0",
+    "electron-builder": "^24.13.3"
+  }
+}

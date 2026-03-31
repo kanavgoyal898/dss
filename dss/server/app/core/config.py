@@ -7,6 +7,7 @@ Responsibilities:
 Dependencies: pydantic-settings
 """
 
+import os
 from functools import lru_cache
 from typing import List
 
@@ -20,11 +21,11 @@ class Settings(BaseSettings):
     app_name: str = "DSS Coordinator"
     host: str = Field(default="0.0.0.0", validation_alias="DSS_SERVER_HOST")
     port: int = Field(default=8000, validation_alias="DSS_SERVER_PORT")
-    jwt_secret: str = Field(default="dss-change-me-in-production", validation_alias="DSS_JWT_SECRET")
+    jwt_secret: str = Field(..., validation_alias="DSS_JWT_SECRET")
     jwt_algorithm: str = "HS256"
     jwt_expire_minutes: int = Field(default=60, validation_alias="DSS_JWT_EXPIRE_MINUTES")
 
-    admin_password: str = Field(default="", validation_alias="DSS_ADMIN_PASSWORD")
+    admin_password: str = Field(default="admin", validation_alias="DSS_ADMIN_PASSWORD")
 
     network_mode: str = Field(default="global", validation_alias="DSS_NETWORK_MODE")
     allowed_ips: List[str] = Field(default=[], validation_alias="DSS_ALLOWED_IPS")
@@ -40,6 +41,13 @@ class Settings(BaseSettings):
         env_file_encoding="utf-8",
         extra="ignore",
     )
+
+    def get_port(self) -> int:
+        """Resolve port safely across environments."""
+        return int(
+            os.environ.get("PORT")
+            or os.environ.get("DSS_SERVER_PORT", self.port)
+        )
 
 
 @lru_cache()

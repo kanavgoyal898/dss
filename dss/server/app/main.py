@@ -80,7 +80,7 @@ if __name__ == "__main__":
     uvicorn.run(
         "dss.server.app.main:app",
         host=settings.host,
-        port=settings.port,
+        port=settings.get_port(),
         reload=False,
         log_level="info",
     )

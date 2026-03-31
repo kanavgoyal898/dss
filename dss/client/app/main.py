@@ -29,9 +29,6 @@ from dss.shared.schemas.peer import PeerRegistration
 
 logger = logging.getLogger("dss.node")
 
-_DATA_SHARDS = 4
-_TOTAL_SHARDS = 6
-
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -44,8 +41,8 @@ async def lifespan(app: FastAPI):
     registration = PeerRegistration(
         node_id=identity.node_id,
         public_key_pem=identity.public_key_pem,
-        host=settings.advertised_host,
-        port=settings.port,
+        host=settings.get_advertised_host(),
+        port=settings.get_port(),
         capacity_bytes=settings.capacity_bytes,
     )
 
@@ -60,8 +57,8 @@ async def lifespan(app: FastAPI):
     upload_pipeline = UploadPipeline(
         coordinator=coordinator,
         identity=identity,
-        data_shards=_DATA_SHARDS,
-        total_shards=_TOTAL_SHARDS,
+        data_shards=settings.data_shards,
+        total_shards=settings.total_shards,
         chunk_size=settings.chunk_size_bytes,
     )
     download_pipeline = DownloadPipeline(coordinator=coordinator, identity=identity)
@@ -115,7 +112,7 @@ if __name__ == "__main__":
     uvicorn.run(
         "dss.client.app.main:app",
         host=settings.host,
-        port=settings.port,
+        port=settings.get_port(),
         reload=False,
         log_level="info",
     )

@@ -115,13 +115,17 @@ function UploadItem({ name, pct, done, error }) {
   );
 }
 
+const DEFAULT_COORD_URL = process.env.NEXT_PUBLIC_COORDINATOR_URL || "http://localhost:8000";
+
 export default function NodeDashboard() {
   const [info, setInfo] = useState(null);
   const [shards, setShards] = useState([]);
   const [files, setFiles] = useState([]);
   const [coordinatorUrl, setCoordinatorUrl] = useState(() => {
-    if (typeof window !== "undefined") return localStorage.getItem(COORD_URL_KEY) || "http://localhost:8000";
-    return "http://localhost:8000";
+    if (typeof window !== "undefined") {
+      return localStorage.getItem(COORD_URL_KEY) || DEFAULT_COORD_URL;
+    }
+    return DEFAULT_COORD_URL;
   });
   const [connecting, setConnecting] = useState(false);
   const [uploads, setUploads] = useState({});

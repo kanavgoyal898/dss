@@ -1,0 +1,9 @@
+fastapi
+uvicorn[standard]
+httpx
+pydantic
+pydantic-settings
+cryptography
+python-jose
+python-multipart
+zfec

@@ -17,6 +17,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from dss.client.app.api.routes.node import router as node_router
+from dss.client.app.api.routes.node_storage import router as node_storage_router
 from dss.client.app.api.routes.shards import router as shards_router
 from dss.client.app.core.config import get_settings
 from dss.client.app.core.identity import load_or_create_identity
@@ -101,6 +102,7 @@ def create_app() -> FastAPI:
     )
     app.include_router(shards_router)
     app.include_router(node_router)
+    app.include_router(node_storage_router)
     return app
 
 

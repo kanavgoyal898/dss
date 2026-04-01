@@ -4,7 +4,8 @@
  * DSS Node Dashboard.
  * Purpose: Full peer node management — coordinator connection with URL persistence,
  *   drag-and-drop upload with real-time SSE progress, file table with one-click download,
- *   delete with two-stage confirmation, shard inventory, and disk usage display.
+ *   delete with two-stage confirmation, shard inventory, disk usage display,
+ *   and a lockable storage capacity slider.
  * Dependencies: React, shadcn/ui, Next.js App Router
  */
 
@@ -22,6 +23,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 
 const NODE_API = process.env.NEXT_PUBLIC_NODE_URL ?? "http://localhost:8100";
 const COORD_URL_KEY = "dss_coordinator_url";
+const _GB = 1024 ** 3;
 
 async function nodeFetch(path, options = {}) {
   const res = await fetch(`${NODE_API}${path}`, {
@@ -42,6 +44,9 @@ function bytes(n) {
   if (n >= 1e3) return `${(n / 1e3).toFixed(1)} KB`;
   return `${n} B`;
 }
+
+function toGB(b) { return b / _GB; }
+function fromGB(g) { return Math.round(g * _GB); }
 
 function ConnectionBadge({ connected }) {
   return (
@@ -124,10 +129,210 @@ function Toast({ toast }) {
   );
 }
 
+function StorageSlider({ storageInfo, onSave }) {
+  const { capacity_bytes, used_bytes, min_capacity_bytes, max_capacity_bytes } = storageInfo;
+
+  const minGB = Math.ceil(min_capacity_bytes / _GB);
+  const maxGB = Math.floor(max_capacity_bytes / _GB);
+  const currentGB = Math.round(capacity_bytes / _GB);
+
+  const sliderDisabled = maxGB <= minGB;
+
+  const [unlocked, setUnlocked] = useState(false);
+  const [sliderVal, setSliderVal] = useState(currentGB);
+  const [inputVal, setInputVal] = useState(String(currentGB));
+  const [saving, setSaving] = useState(false);
+  const [localError, setLocalError] = useState("");
+
+  useEffect(() => {
+    if (!unlocked) {
+      setSliderVal(currentGB);
+      setInputVal(String(currentGB));
+    }
+  }, [currentGB, unlocked]);
+
+  function clampGB(v) {
+    return Math.max(minGB, Math.min(maxGB, v));
+  }
+
+  function handleSlider(e) {
+    const v = clampGB(Number(e.target.value));
+    setSliderVal(v);
+    setInputVal(String(v));
+    setLocalError("");
+  }
+
+  function handleInput(e) {
+    setInputVal(e.target.value);
+    const parsed = parseInt(e.target.value, 10);
+    if (!isNaN(parsed)) {
+      setSliderVal(clampGB(parsed));
+      if (parsed < minGB) {
+        setLocalError(`Minimum is ${minGB} GB (current shard usage rounded up)`);
+      } else if (parsed > maxGB) {
+        setLocalError(`Maximum is ${maxGB} GB (available disk space)`);
+      } else {
+        setLocalError("");
+      }
+    }
+  }
+
+  function handleInputBlur() {
+    const parsed = parseInt(inputVal, 10);
+    const clamped = isNaN(parsed) ? currentGB : clampGB(parsed);
+    setSliderVal(clamped);
+    setInputVal(String(clamped));
+    setLocalError("");
+  }
+
+  function handleUnlock() {
+    setUnlocked(true);
+    setSliderVal(currentGB);
+    setInputVal(String(currentGB));
+    setLocalError("");
+  }
+
+  function handleCancel() {
+    setUnlocked(false);
+    setSliderVal(currentGB);
+    setInputVal(String(currentGB));
+    setLocalError("");
+  }
+
+  async function handleSave() {
+    const gb = clampGB(parseInt(inputVal, 10) || sliderVal);
+    if (gb < minGB || gb > maxGB) return;
+    setSaving(true);
+    setLocalError("");
+    try {
+      await onSave(gb * _GB);
+      setUnlocked(false);
+    } catch (e) {
+      setLocalError(e.message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const usedGB = toGB(used_bytes);
+  const usedPct = maxGB > 0 ? Math.min(100, (usedGB / maxGB) * 100) : 0;
+  const allocPct = maxGB > 0 ? Math.min(100, (sliderVal / maxGB) * 100) : 0;
+  const changed = sliderVal !== currentGB;
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <div>
+          <p className="text-sm font-medium">Allowed Storage</p>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            {bytes(used_bytes)} used · {bytes(max_capacity_bytes)} available on disk
+          </p>
+        </div>
+        {!unlocked ? (
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-7 text-xs gap-1.5"
+            onClick={handleUnlock}
+            disabled={sliderDisabled}
+            title={sliderDisabled ? "Less than 1 GB free on disk" : "Edit storage limit"}
+          >
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+              <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+            </svg>
+            Edit limit
+          </Button>
+        ) : (
+          <div className="flex gap-1.5">
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-7 text-xs"
+              onClick={handleCancel}
+              disabled={saving}
+            >
+              Cancel
+            </Button>
+            <Button
+              size="sm"
+              className="h-7 text-xs"
+              onClick={handleSave}
+              disabled={saving || !!localError || !changed}
+            >
+              {saving ? "Saving…" : "Save"}
+            </Button>
+          </div>
+        )}
+      </div>
+
+      <div className="relative h-3 rounded-full bg-secondary overflow-hidden">
+        <div
+          className={`absolute left-0 top-0 h-full rounded-full transition-all ${
+            unlocked ? "bg-primary/20" : "bg-secondary"
+          }`}
+          style={{ width: `${allocPct}%` }}
+        />
+        <div
+          className="absolute left-0 top-0 h-full rounded-full bg-primary transition-all"
+          style={{ width: `${usedPct}%` }}
+        />
+      </div>
+
+      <div className="flex items-center gap-3">
+        <div className="flex items-center gap-1.5 flex-1">
+          <Input
+            type="number"
+            min={minGB}
+            max={maxGB}
+            step={1}
+            value={inputVal}
+            onChange={handleInput}
+            onBlur={handleInputBlur}
+            disabled={!unlocked || sliderDisabled}
+            className="h-8 text-sm font-mono w-24"
+          />
+          <span className="text-sm text-muted-foreground">GB</span>
+        </div>
+        <div className="text-right">
+          <p className="text-xs text-muted-foreground">
+            Current:{" "}
+            <span className="font-semibold text-foreground tabular-nums">{currentGB} GB</span>
+          </p>
+          {unlocked && changed && (
+            <p className="text-xs text-primary font-medium">
+              → {sliderVal} GB
+            </p>
+          )}
+        </div>
+      </div>
+
+      {!unlocked && !sliderDisabled && (
+        <p className="text-xs text-muted-foreground flex items-center gap-1">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+          </svg>
+          Cannot go below {minGB} GB (current usage).
+        </p>
+      )}
+      {sliderDisabled && (
+        <p className="text-xs text-amber-600">
+          Less than 1 GB of disk space available — free up space to adjust the limit.
+        </p>
+      )}
+
+      {localError && (
+        <p className="text-xs text-destructive">{localError}</p>
+      )}
+    </div>
+  );
+}
+
 const DEFAULT_COORD_URL = process.env.NEXT_PUBLIC_COORDINATOR_URL || "http://localhost:8000";
 
 export default function NodeDashboard() {
   const [info, setInfo] = useState(null);
+  const [storageInfo, setStorageInfo] = useState(null);
   const [shards, setShards] = useState([]);
   const [files, setFiles] = useState([]);
   const [coordinatorUrl, setCoordinatorUrl] = useState(() => {
@@ -155,12 +360,14 @@ export default function NodeDashboard() {
 
   const refresh = useCallback(async () => {
     try {
-      const [i, s] = await Promise.all([
+      const [i, s, stor] = await Promise.all([
         nodeFetch("/api/v1/node/info"),
         nodeFetch("/api/v1/shards"),
+        nodeFetch("/api/v1/node/storage"),
       ]);
       setInfo(i);
       setShards(s.shards ?? []);
+      setStorageInfo(stor);
       nodeReady.current = true;
       setError("");
       if (i.coordinator_connected) {
@@ -322,8 +529,21 @@ export default function NodeDashboard() {
     }
   }
 
+  async function handleStorageSave(newCapacityBytes) {
+    await nodeFetch("/api/v1/node/storage", {
+      method: "PATCH",
+      body: JSON.stringify({ capacity_bytes: newCapacityBytes }),
+    });
+    showToast(`Storage limit updated to ${Math.round(newCapacityBytes / _GB)} GB`);
+    await refresh();
+  }
+
   const connected = info?.coordinator_connected ?? false;
-  const usedPct = info ? Math.min(100, Math.round((info.used_bytes / info.capacity_bytes) * 100)) : 0;
+  const usedPct = storageInfo
+    ? Math.min(100, Math.round((storageInfo.used_bytes / storageInfo.capacity_bytes) * 100))
+    : info
+    ? Math.min(100, Math.round((info.used_bytes / info.capacity_bytes) * 100))
+    : 0;
   const uploadEntries = Object.entries(uploads);
   const downloadEntries = Object.entries(downloads);
 
@@ -385,11 +605,15 @@ export default function NodeDashboard() {
               <CardContent className="space-y-4">
                 <div>
                   <div className="flex justify-between text-xs text-muted-foreground mb-1.5">
-                    <span>Disk used</span>
-                    <span>{bytes(info?.used_bytes)} / {bytes(info?.capacity_bytes)}</span>
+                    <span>Shard usage</span>
+                    <span>
+                      {bytes(storageInfo?.used_bytes ?? info?.used_bytes ?? 0)} /{" "}
+                      {bytes(storageInfo?.capacity_bytes ?? info?.capacity_bytes ?? 0)}
+                    </span>
                   </div>
                   <Progress value={usedPct} className="h-2" />
                 </div>
+
                 <div className="grid grid-cols-2 gap-3">
                   <div className="rounded-lg border p-3 text-center">
                     <p className="text-2xl font-semibold">{info?.shard_count ?? 0}</p>
@@ -400,6 +624,14 @@ export default function NodeDashboard() {
                     <p className="text-xs text-muted-foreground mt-0.5">Files</p>
                   </div>
                 </div>
+
+                <Separator />
+
+                {storageInfo ? (
+                  <StorageSlider storageInfo={storageInfo} onSave={handleStorageSave} />
+                ) : (
+                  <p className="text-xs text-muted-foreground">Loading storage info…</p>
+                )}
               </CardContent>
             </Card>
 

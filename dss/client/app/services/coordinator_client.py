@@ -6,6 +6,7 @@ Responsibilities:
     - Initialise upload sessions and complete them with shard location reports.
     - Retrieve file download information for a given file_id.
     - List all files tracked by the coordinator.
+    - Delete a file and all its shards via the coordinator.
     - Support runtime coordinator URL updates for in-app configuration.
 Dependencies: httpx, asyncio, dss.shared.schemas.*
 """
@@ -159,6 +160,20 @@ class CoordinatorClient:
         )
         resp.raise_for_status()
         return [FileMetadata(**f) for f in resp.json()]
+
+    async def delete_file(self, file_id: str) -> dict:
+        """
+        Request the coordinator to delete a file and all its peer shards.
+        Returns a summary dict with deleted_shards and failed_shards counts.
+        Raises httpx.HTTPStatusError on coordinator-level failure.
+        """
+        resp = await self._client.delete(
+            f"{self._base}/api/v1/files/{file_id}",
+            headers=self._headers,
+            timeout=30.0,
+        )
+        resp.raise_for_status()
+        return resp.json()
 
     async def close(self) -> None:
         """Close the underlying HTTP connection pool gracefully."""

@@ -4,7 +4,7 @@
  * DSS Node Dashboard.
  * Purpose: Full peer node management — coordinator connection with URL persistence,
  *   drag-and-drop upload with real-time SSE progress, file table with one-click download,
- *   shard inventory, and disk usage display.
+ *   delete with two-stage confirmation, shard inventory, and disk usage display.
  * Dependencies: React, shadcn/ui, Next.js App Router
  */
 
@@ -97,7 +97,7 @@ function DropZone({ onFiles, disabled }) {
   );
 }
 
-function UploadItem({ name, pct, done, error }) {
+function TransferItem({ name, pct, done, error }) {
   return (
     <div className="space-y-1.5 py-2 border-b last:border-0">
       <div className="flex justify-between text-xs">
@@ -112,6 +112,15 @@ function UploadItem({ name, pct, done, error }) {
       />
       {error && <p className="text-xs text-destructive">{error}</p>}
     </div>
+  );
+}
+
+function Toast({ toast }) {
+  if (!toast) return null;
+  return (
+    <Alert variant={toast.variant === "error" ? "destructive" : "default"}>
+      <AlertDescription>{toast.msg}</AlertDescription>
+    </Alert>
   );
 }
 
@@ -132,12 +141,17 @@ export default function NodeDashboard() {
   const [downloads, setDownloads] = useState({});
   const [toast, setToast] = useState(null);
   const [error, setError] = useState("");
+
+  const [confirmDelete, setConfirmDelete] = useState(null);
+  const [deleting, setDeleting] = useState(null);
+  const confirmTimerRef = useRef(null);
+
   const nodeReady = useRef(false);
 
-  const showToast = (msg, variant = "ok") => {
+  const showToast = useCallback((msg, variant = "ok") => {
     setToast({ msg, variant });
-    setTimeout(() => setToast(null), 4000);
-  };
+    setTimeout(() => setToast(null), 5000);
+  }, []);
 
   const refresh = useCallback(async () => {
     try {
@@ -163,6 +177,8 @@ export default function NodeDashboard() {
     const id = setInterval(refresh, 8000);
     return () => clearInterval(id);
   }, [refresh]);
+
+  useEffect(() => () => clearTimeout(confirmTimerRef.current), []);
 
   async function handleConnect() {
     setConnecting(true);
@@ -215,7 +231,7 @@ export default function NodeDashboard() {
                 setUploads((u) => ({ ...u, [id]: { ...u[id], pct: msg.pct } }));
               } else if (msg.type === "done") {
                 setUploads((u) => ({ ...u, [id]: { ...u[id], pct: 100, done: true } }));
-                showToast(`${file.name} uploaded successfully`);
+                showToast(`"${file.name}" uploaded successfully`);
                 setTimeout(() => setUploads((u) => { const n = { ...u }; delete n[id]; return n; }), 3000);
                 await refresh();
               } else if (msg.type === "error") {
@@ -276,6 +292,36 @@ export default function NodeDashboard() {
     }
   }
 
+  async function handleDelete(fileId, filename) {
+    if (confirmDelete !== fileId) {
+      clearTimeout(confirmTimerRef.current);
+      setConfirmDelete(fileId);
+      confirmTimerRef.current = setTimeout(() => {
+        setConfirmDelete((cur) => (cur === fileId ? null : cur));
+      }, 3000);
+      return;
+    }
+
+    clearTimeout(confirmTimerRef.current);
+    setConfirmDelete(null);
+    setDeleting(fileId);
+
+    try {
+      const result = await nodeFetch(`/api/v1/node/files/${fileId}`, { method: "DELETE" });
+      const { deleted_shards, failed_shards, total_shards } = result;
+      const detail =
+        failed_shards > 0
+          ? `${deleted_shards}/${total_shards} shards removed (${failed_shards} unreachable peers skipped)`
+          : `All ${deleted_shards} shards removed`;
+      showToast(`"${filename}" deleted — ${detail}`);
+      await refresh();
+    } catch (e) {
+      showToast(`Delete failed: ${e.message}`, "error");
+    } finally {
+      setDeleting(null);
+    }
+  }
+
   const connected = info?.coordinator_connected ?? false;
   const usedPct = info ? Math.min(100, Math.round((info.used_bytes / info.capacity_bytes) * 100)) : 0;
   const uploadEntries = Object.entries(uploads);
@@ -299,11 +345,8 @@ export default function NodeDashboard() {
             <AlertDescription>{error}</AlertDescription>
           </Alert>
         )}
-        {toast && (
-          <Alert variant={toast.variant === "ok" ? "default" : "destructive"}>
-            <AlertDescription>{toast.msg}</AlertDescription>
-          </Alert>
-        )}
+
+        <Toast toast={toast} />
 
         <Card className={!connected ? "border-amber-400/40 bg-amber-50/5" : ""}>
           <CardHeader className="pb-3">
@@ -370,7 +413,7 @@ export default function NodeDashboard() {
                 {uploadEntries.length > 0 && (
                   <div className="mt-2">
                     {uploadEntries.map(([id, u]) => (
-                      <UploadItem key={id} name={u.name} pct={u.pct} done={u.done} error={u.error} />
+                      <TransferItem key={id} name={u.name} pct={u.pct} done={u.done} error={u.error} />
                     ))}
                   </div>
                 )}
@@ -384,7 +427,7 @@ export default function NodeDashboard() {
                 </CardHeader>
                 <CardContent>
                   {downloadEntries.map(([id, d]) => (
-                    <UploadItem key={id} name={d.filename} pct={d.pct} done={d.done} error={d.error} />
+                    <TransferItem key={id} name={d.filename} pct={d.pct} done={d.done} error={d.error} />
                   ))}
                 </CardContent>
               </Card>
@@ -396,7 +439,9 @@ export default function NodeDashboard() {
               <CardHeader className="pb-3">
                 <CardTitle className="text-base">My Files</CardTitle>
                 <CardDescription>
-                  {connected ? "Click Download to retrieve and decrypt any file." : "Connect to a coordinator to see your files."}
+                  {connected
+                    ? "Download retrieves and decrypts. Delete permanently removes all shards."
+                    : "Connect to a coordinator to see your files."}
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -408,13 +453,13 @@ export default function NodeDashboard() {
                         <TableHead>Size</TableHead>
                         <TableHead>Shards</TableHead>
                         <TableHead>Status</TableHead>
-                        <TableHead className="text-right">Action</TableHead>
+                        <TableHead className="text-right">Actions</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {files.map((f) => (
                         <TableRow key={f.file_id}>
-                          <TableCell className="font-medium max-w-[160px] truncate" title={f.filename}>
+                          <TableCell className="font-medium max-w-[140px] truncate" title={f.filename}>
                             {f.filename}
                           </TableCell>
                           <TableCell className="text-xs text-muted-foreground">{bytes(f.size_bytes)}</TableCell>
@@ -425,17 +470,37 @@ export default function NodeDashboard() {
                             </Badge>
                           </TableCell>
                           <TableCell className="text-right">
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="h-7 text-xs"
-                              onClick={() => handleDownload(f.file_id, f.filename)}
-                              disabled={!connected || !!downloads[f.file_id]}
-                            >
-                              {downloads[f.file_id] && !downloads[f.file_id].done && !downloads[f.file_id].error
-                                ? `${downloads[f.file_id].pct}%`
-                                : "Download"}
-                            </Button>
+                            <div className="flex items-center justify-end gap-1.5">
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="h-7 text-xs"
+                                onClick={() => handleDownload(f.file_id, f.filename)}
+                                disabled={!connected || !!downloads[f.file_id]}
+                              >
+                                {downloads[f.file_id] && !downloads[f.file_id].done && !downloads[f.file_id].error
+                                  ? `${downloads[f.file_id].pct}%`
+                                  : "Download"}
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant={confirmDelete === f.file_id ? "destructive" : "ghost"}
+                                className="h-7 text-xs"
+                                onClick={() => handleDelete(f.file_id, f.filename)}
+                                disabled={!connected || deleting === f.file_id}
+                                title={
+                                  confirmDelete === f.file_id
+                                    ? "Click again to permanently delete"
+                                    : "Delete file and all shards"
+                                }
+                              >
+                                {deleting === f.file_id
+                                  ? "Deleting…"
+                                  : confirmDelete === f.file_id
+                                  ? "Sure?"
+                                  : "Delete"}
+                              </Button>
+                            </div>
                           </TableCell>
                         </TableRow>
                       ))}

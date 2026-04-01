@@ -7,11 +7,17 @@ Responsibilities:
     - GET  /files/{file_id} — retrieve metadata for a specific file (owner or admin only).
     - GET  /files/{file_id}/download — return shard locations and keys for download
                                        (owner or admin only).
-Dependencies: fastapi, dss.server.app.core.auth, dss.server.app.core.dependencies,
-              dss.server.app.services.metadata_store, dss.server.app.services.shard_mapper,
-              dss.shared.schemas.file
+    - DELETE /files/{file_id} — delete all peer shards then purge coordinator metadata
+                                 (owner or admin only).
+Dependencies: fastapi, asyncio, httpx, dss.server.app.core.auth,
+              dss.server.app.core.dependencies, dss.server.app.services.metadata_store,
+              dss.server.app.services.shard_mapper, dss.shared.schemas.file
 """
 
+import asyncio
+import logging
+
+import httpx
 from fastapi import APIRouter, Depends, HTTPException, status
 
 from dss.server.app.core.auth import ADMIN_SUBJECT, require_peer_auth
@@ -25,7 +31,11 @@ from dss.shared.schemas.file import (
     FileUploadInit,
 )
 
+logger = logging.getLogger("dss.files_api")
+
 router = APIRouter(prefix="/files", tags=["files"])
+
+_DELETE_TIMEOUT = httpx.Timeout(connect=5.0, read=10.0, write=5.0, pool=5.0)
 
 
 def _is_admin(node_id: str) -> bool:
@@ -159,3 +169,72 @@ async def get_download_info(
         total_shards=meta.total_shards,
         ciphertext_size=meta.ciphertext_size,
     )
+
+
+@router.delete("/{file_id}")
+async def delete_file(
+    file_id: str,
+    node_id: str = Depends(require_peer_auth),
+    store: MetadataStore = Depends(get_metadata_store),
+) -> dict:
+    """
+    Permanently delete a file from DSS.
+
+    Fans out DELETE requests to every peer node that holds a shard for this file,
+    then removes the file record from the coordinator metadata store.
+
+    Only the owning node or an admin may delete a file.
+    Returns a summary of how many shards were deleted and how many failed.
+    HTTP 404 if the file does not exist; HTTP 403 if the caller is not the owner.
+    """
+    meta = await store.get_file(file_id)
+    if meta is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"DSS: file {file_id} not found",
+        )
+    if not _is_admin(node_id) and meta.owner_node_id != node_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="DSS: access denied — you are not the owner of this file",
+        )
+
+    deleted_shards = 0
+    failed_shards = 0
+
+    async with httpx.AsyncClient(timeout=_DELETE_TIMEOUT) as client:
+
+        async def _delete_one_shard(loc) -> bool:
+            """Send DELETE to the peer holding this shard; returns True on success."""
+            shard_id = f"{file_id}-{loc.shard_index}"
+            url = f"https://{loc.host}/api/v1/shards/{shard_id}"
+            try:
+                resp = await client.delete(url)
+                return resp.status_code in (204, 404)
+            except Exception as exc:
+                logger.warning("DSS: failed to delete shard %s from %s: %s", shard_id, loc.host, exc)
+                return False
+
+        results = await asyncio.gather(
+            *[_delete_one_shard(loc) for loc in meta.shard_locations]
+        )
+
+    deleted_shards = sum(1 for ok in results if ok)
+    failed_shards = sum(1 for ok in results if not ok)
+
+    await store.delete_file(file_id)
+    logger.info(
+        "DSS file deleted: %s (%s) — %d/%d shards removed",
+        file_id,
+        meta.filename,
+        deleted_shards,
+        len(meta.shard_locations),
+    )
+
+    return {
+        "file_id": file_id,
+        "filename": meta.filename,
+        "deleted_shards": deleted_shards,
+        "failed_shards": failed_shards,
+        "total_shards": len(meta.shard_locations),
+    }

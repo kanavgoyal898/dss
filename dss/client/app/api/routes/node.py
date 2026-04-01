@@ -1,11 +1,12 @@
 """
 Purpose: DSS Peer Node status, configuration, and transfer API routes.
 Responsibilities:
-    - GET  /node/info          — identity, capacity, coordinator connectivity status.
-    - GET  /node/files         — files owned by this node (via coordinator).
-    - POST /node/connect       — configure coordinator URL and register.
-    - POST /node/upload-bytes  — multipart drag-and-drop file upload with SSE progress.
-    - POST /node/download      — trigger download pipeline for a file_id.
+    - GET    /node/info                — identity, capacity, coordinator connectivity status.
+    - GET    /node/files               — files owned by this node (via coordinator).
+    - POST   /node/connect             — configure coordinator URL and register.
+    - POST   /node/upload-bytes        — multipart drag-and-drop file upload with SSE progress.
+    - POST   /node/download            — trigger download pipeline for a file_id.
+    - DELETE /node/files/{file_id}     — instruct coordinator to delete file + all shards.
 Dependencies: fastapi, python-multipart, dss.client.app.services.*
 """
 
@@ -93,6 +94,37 @@ async def list_my_files(request: Request) -> dict:
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail=f"Lost connection to coordinator: {exc}",
+        )
+
+
+@router.delete("/files/{file_id}")
+async def delete_file(file_id: str, request: Request) -> dict:
+    """
+    Delete a file and all its shards across every peer node.
+
+    Proxies the delete request to the coordinator, which fans out shard deletion
+    to each peer and then removes the file record from its metadata store.
+
+    Returns a deletion summary with counts of deleted and failed shards.
+    Raises HTTP 503 if not connected; HTTP 404/403 are forwarded from the coordinator.
+    """
+    coordinator = request.app.state.coordinator
+    if not coordinator.is_registered:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Not connected to a coordinator. Connect first via the dashboard.",
+        )
+    if not file_id.strip():
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="file_id is required")
+    try:
+        result = await coordinator.delete_file(file_id)
+        logger.info("DSS file deletion complete: %s", file_id)
+        return result
+    except Exception as exc:
+        logger.error("DSS file deletion failed: %s — %s", file_id, exc)
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"File deletion failed: {exc}",
         )
 
 

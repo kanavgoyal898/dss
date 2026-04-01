@@ -5,6 +5,7 @@ Responsibilities:
     - Persist shard assignment data returned by completing upload sessions.
     - List all files or files owned by a specific peer node.
     - Mark file status transitions (UPLOADING → AVAILABLE → DEGRADED).
+    - Permanently delete file records from the store.
 Dependencies: asyncio, uuid, dss.server.app.models.file, dss.shared.schemas.file
 """
 
@@ -94,6 +95,15 @@ class MetadataStore:
                 for r in self._files.values()
                 if r.owner_node_id == owner_node_id
             ]
+
+    async def delete_file(self, file_id: str) -> Optional[FileMetadata]:
+        """
+        Permanently remove a file record from the metadata store.
+        Returns the deleted FileMetadata schema, or None if the file_id was not found.
+        """
+        async with self._lock:
+            record = self._files.pop(file_id, None)
+        return record.to_schema() if record else None
 
     async def mark_degraded(self, file_id: str) -> None:
         """Transition a file's status to DEGRADED when shards are unavailable."""

@@ -118,7 +118,7 @@ function LoginForm({ onLogin }) {
   }
 
   return (
-    <div className="min-h-screen bg-background flex items-center justify-center p-6">
+    <div className="min-h-screen bg-background flex items-center justify-center p-4 sm:p-6">
       <Card className="w-full max-w-sm">
         <CardHeader className="text-center pb-4">
           <CardTitle className="text-2xl">DSS Admin</CardTitle>
@@ -287,25 +287,34 @@ export default function AdminDashboard() {
   return (
     <div className="min-h-screen bg-background">
       <div className="border-b sticky top-0 z-10 bg-background">
-        <div className="max-w-7xl mx-auto px-6 py-3 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <span className="font-semibold tracking-tight">DSS Admin</span>
-            <Badge variant={coordOnline ? "default" : "destructive"} className="text-xs">
+        <div className="max-w-7xl mx-auto px-3 sm:px-6 py-3 flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+            <span className="font-semibold tracking-tight shrink-0">DSS Admin</span>
+            <Badge
+              variant={coordOnline ? "default" : "destructive"}
+              className="text-xs hidden sm:inline-flex"
+            >
               {coordOnline ? "● Coordinator Online" : "○ Coordinator Offline"}
             </Badge>
+            <span
+              className={`inline-block sm:hidden w-2 h-2 rounded-full shrink-0 ${
+                coordOnline ? "bg-green-500" : "bg-red-500"
+              }`}
+              title={coordOnline ? "Coordinator Online" : "Coordinator Offline"}
+            />
           </div>
-          <div className="flex items-center gap-2">
-            <Button variant="ghost" size="sm" onClick={refresh}>
+          <div className="flex items-center gap-1 sm:gap-2 shrink-0">
+            <Button variant="ghost" size="sm" onClick={refresh} className="text-xs sm:text-sm">
               Refresh
             </Button>
-            <Button variant="outline" size="sm" onClick={handleLogout}>
+            <Button variant="outline" size="sm" onClick={handleLogout} className="text-xs sm:text-sm">
               Sign out
             </Button>
           </div>
         </div>
       </div>
 
-      <div className="max-w-7xl mx-auto px-6 py-6 space-y-6">
+      <div className="max-w-7xl mx-auto px-3 sm:px-6 py-4 sm:py-6 space-y-4 sm:space-y-6">
         {error && (
           <Alert variant="destructive">
             <AlertDescription>{error}</AlertDescription>
@@ -317,7 +326,7 @@ export default function AdminDashboard() {
           </Alert>
         )}
 
-        <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-3 sm:gap-4 grid-cols-2 lg:grid-cols-4">
           <StatCard label="Total Peers" value={health?.total_peers} sub="Registered nodes" />
           <StatCard
             label="Online Peers"
@@ -337,8 +346,8 @@ export default function AdminDashboard() {
           />
         </div>
 
-        <div className="grid gap-6 lg:grid-cols-3">
-          <div className="lg:col-span-2 space-y-6">
+        <div className="grid gap-4 sm:gap-6 grid-cols-1 lg:grid-cols-3">
+          <div className="lg:col-span-2 space-y-4 sm:space-y-6">
             <Card>
               <CardHeader className="pb-3">
                 <CardTitle className="text-base">Peer Nodes</CardTitle>
@@ -350,24 +359,24 @@ export default function AdminDashboard() {
                     <TableHeader>
                       <TableRow>
                         <TableHead>Node ID</TableHead>
-                        <TableHead>Host</TableHead>
-                        <TableHead>Port</TableHead>
+                        <TableHead className="hidden sm:table-cell">Host</TableHead>
+                        <TableHead className="hidden md:table-cell">Port</TableHead>
                         <TableHead>Status</TableHead>
-                        <TableHead className="text-right">Disk Used</TableHead>
+                        <TableHead className="text-right hidden sm:table-cell">Disk Used</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {peers.map((p) => (
                         <TableRow key={p.node_id}>
                           <TableCell className="font-mono text-xs" title={p.node_id}>
-                            {p.node_id.slice(0, 12)}…
+                            {p.node_id.slice(0, 8)}…
                           </TableCell>
-                          <TableCell className="text-sm">{p.host}</TableCell>
-                          <TableCell className="text-sm">{p.port}</TableCell>
+                          <TableCell className="text-sm hidden sm:table-cell">{p.host}</TableCell>
+                          <TableCell className="text-sm hidden md:table-cell">{p.port}</TableCell>
                           <TableCell>
                             <PeerBadge status={p.status} />
                           </TableCell>
-                          <TableCell className="text-right text-xs text-muted-foreground">
+                          <TableCell className="text-right text-xs text-muted-foreground hidden sm:table-cell">
                             {bytes(p.used_bytes)} / {bytes(p.capacity_bytes)}
                           </TableCell>
                         </TableRow>
@@ -399,25 +408,25 @@ export default function AdminDashboard() {
                     <TableHeader>
                       <TableRow>
                         <TableHead>Filename</TableHead>
-                        <TableHead>Size</TableHead>
-                        <TableHead>Shards (k/n)</TableHead>
+                        <TableHead className="hidden sm:table-cell">Size</TableHead>
+                        <TableHead className="hidden md:table-cell">Shards (k/n)</TableHead>
                         <TableHead>Status</TableHead>
-                        <TableHead>Owner</TableHead>
+                        <TableHead className="hidden sm:table-cell">Owner</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {files.map((f) => (
                         <TableRow key={f.file_id}>
                           <TableCell
-                            className="font-medium max-w-[140px] truncate"
+                            className="font-medium max-w-[120px] sm:max-w-[140px] truncate"
                             title={f.filename}
                           >
                             {f.filename}
                           </TableCell>
-                          <TableCell className="text-xs text-muted-foreground">
+                          <TableCell className="text-xs text-muted-foreground hidden sm:table-cell">
                             {bytes(f.size_bytes)}
                           </TableCell>
-                          <TableCell className="text-xs text-muted-foreground">
+                          <TableCell className="text-xs text-muted-foreground hidden md:table-cell">
                             {f.data_shards}/{f.total_shards}
                           </TableCell>
                           <TableCell>
@@ -429,7 +438,7 @@ export default function AdminDashboard() {
                             </Badge>
                           </TableCell>
                           <TableCell
-                            className="font-mono text-xs text-muted-foreground"
+                            className="font-mono text-xs text-muted-foreground hidden sm:table-cell"
                             title={f.owner_node_id}
                           >
                             {f.owner_node_id.slice(0, 10)}…
@@ -453,7 +462,7 @@ export default function AdminDashboard() {
             </Card>
           </div>
 
-          <div className="space-y-6">
+          <div className="space-y-4 sm:space-y-6">
             <Card>
               <CardHeader className="pb-3">
                 <CardTitle className="text-base">Shard Distribution</CardTitle>

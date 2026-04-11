@@ -79,7 +79,7 @@ function DropZone({ onFiles, disabled }) {
       onDrop={handleDrop}
       onClick={() => !disabled && inputRef.current?.click()}
       className={[
-        "border-2 border-dashed rounded-lg p-8 text-center cursor-pointer transition-colors select-none",
+        "border-2 border-dashed rounded-lg p-6 sm:p-8 text-center cursor-pointer transition-colors select-none",
         dragging ? "border-foreground bg-muted" : "border-muted-foreground/25",
         disabled ? "opacity-40 cursor-not-allowed" : "hover:border-muted-foreground/60 hover:bg-muted/30",
       ].join(" ")}
@@ -106,7 +106,7 @@ function TransferItem({ name, pct, done, error }) {
   return (
     <div className="space-y-1.5 py-2 border-b last:border-0">
       <div className="flex justify-between text-xs">
-        <span className="truncate max-w-[180px] font-medium">{name}</span>
+        <span className="truncate max-w-[160px] sm:max-w-[180px] font-medium">{name}</span>
         <span className="text-muted-foreground shrink-0 ml-2">
           {error ? "Failed" : done ? "Done" : `${pct}%`}
         </span>
@@ -221,7 +221,7 @@ function StorageSlider({ storageInfo, onSave }) {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
+      <div className="flex items-start sm:items-center justify-between gap-2">
         <div>
           <p className="text-sm font-medium">Allowed Storage</p>
           <p className="text-xs text-muted-foreground mt-0.5">
@@ -232,7 +232,7 @@ function StorageSlider({ storageInfo, onSave }) {
           <Button
             size="sm"
             variant="outline"
-            className="h-7 text-xs gap-1.5"
+            className="h-7 text-xs gap-1.5 shrink-0"
             onClick={handleUnlock}
             disabled={sliderDisabled}
             title={sliderDisabled ? "Less than 1 GB free on disk" : "Edit storage limit"}
@@ -244,7 +244,7 @@ function StorageSlider({ storageInfo, onSave }) {
             Edit limit
           </Button>
         ) : (
-          <div className="flex gap-1.5">
+          <div className="flex gap-1.5 shrink-0">
             <Button
               size="sm"
               variant="ghost"
@@ -290,7 +290,7 @@ function StorageSlider({ storageInfo, onSave }) {
             onChange={handleInput}
             onBlur={handleInputBlur}
             disabled={!unlocked || sliderDisabled}
-            className="h-8 text-sm font-mono w-24"
+            className="h-8 text-sm font-mono w-20 sm:w-24"
           />
           <span className="text-sm text-muted-foreground">GB</span>
         </div>
@@ -550,16 +550,26 @@ export default function NodeDashboard() {
   return (
     <div className="min-h-screen bg-background">
       <div className="border-b sticky top-0 z-10 bg-background">
-        <div className="max-w-7xl mx-auto px-6 py-3 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <span className="font-semibold tracking-tight">DSS Node</span>
-            <ConnectionBadge connected={connected} />
+        <div className="max-w-7xl mx-auto px-3 sm:px-6 py-3 flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+            <span className="font-semibold tracking-tight shrink-0">DSS Node</span>
+            <span className="hidden sm:block">
+              <ConnectionBadge connected={connected} />
+            </span>
+            <span
+              className={`inline-block sm:hidden w-2 h-2 rounded-full shrink-0 ${
+                connected ? "bg-green-500" : "bg-red-500"
+              }`}
+              title={connected ? "Connected" : "Not connected"}
+            />
           </div>
-          <Button variant="ghost" size="sm" onClick={refresh}>Refresh</Button>
+          <Button variant="ghost" size="sm" onClick={refresh} className="text-xs sm:text-sm shrink-0">
+            Refresh
+          </Button>
         </div>
       </div>
 
-      <div className="max-w-7xl mx-auto px-6 py-6 space-y-5">
+      <div className="max-w-7xl mx-auto px-3 sm:px-6 py-4 sm:py-6 space-y-4 sm:space-y-5">
         {error && (
           <Alert variant="destructive">
             <AlertDescription>{error}</AlertDescription>
@@ -576,7 +586,7 @@ export default function NodeDashboard() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="flex gap-2">
+            <div className="flex flex-col sm:flex-row gap-2">
               <Input
                 placeholder="http://192.168.1.10:8000"
                 value={coordinatorUrl}
@@ -584,7 +594,11 @@ export default function NodeDashboard() {
                 onKeyDown={(e) => e.key === "Enter" && handleConnect()}
                 className="font-mono text-sm"
               />
-              <Button onClick={handleConnect} disabled={connecting || !coordinatorUrl.trim()} className="shrink-0">
+              <Button
+                onClick={handleConnect}
+                disabled={connecting || !coordinatorUrl.trim()}
+                className="shrink-0 w-full sm:w-auto"
+              >
                 {connecting ? "Connecting…" : connected ? "Reconnect" : "Connect"}
               </Button>
             </div>
@@ -596,8 +610,8 @@ export default function NodeDashboard() {
           </CardContent>
         </Card>
 
-        <div className="grid gap-5 lg:grid-cols-3">
-          <div className="space-y-5">
+        <div className="grid gap-4 sm:gap-5 grid-cols-1 lg:grid-cols-3">
+          <div className="space-y-4 sm:space-y-5">
             <Card>
               <CardHeader className="pb-3">
                 <CardTitle className="text-base">Storage</CardTitle>
@@ -665,8 +679,8 @@ export default function NodeDashboard() {
               </Card>
             )}
           </div>
-
-          <div className="lg:col-span-2 space-y-5">
+          
+          <div className="lg:col-span-2 space-y-4 sm:space-y-5">
             <Card>
               <CardHeader className="pb-3">
                 <CardTitle className="text-base">My Files</CardTitle>
@@ -682,31 +696,35 @@ export default function NodeDashboard() {
                     <TableHeader>
                       <TableRow>
                         <TableHead>Filename</TableHead>
-                        <TableHead>Size</TableHead>
-                        <TableHead>Shards</TableHead>
-                        <TableHead>Status</TableHead>
+                        <TableHead className="hidden sm:table-cell">Size</TableHead>
+                        <TableHead className="hidden md:table-cell">Shards</TableHead>
+                        <TableHead className="hidden sm:table-cell">Status</TableHead>
                         <TableHead className="text-right">Actions</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {files.map((f) => (
                         <TableRow key={f.file_id}>
-                          <TableCell className="font-medium max-w-[140px] truncate" title={f.filename}>
+                          <TableCell className="font-medium max-w-[120px] sm:max-w-[140px] truncate" title={f.filename}>
                             {f.filename}
                           </TableCell>
-                          <TableCell className="text-xs text-muted-foreground">{bytes(f.size_bytes)}</TableCell>
-                          <TableCell className="text-xs text-muted-foreground">{f.data_shards}/{f.total_shards}</TableCell>
-                          <TableCell>
+                          <TableCell className="text-xs text-muted-foreground hidden sm:table-cell">
+                            {bytes(f.size_bytes)}
+                          </TableCell>
+                          <TableCell className="text-xs text-muted-foreground hidden md:table-cell">
+                            {f.data_shards}/{f.total_shards}
+                          </TableCell>
+                          <TableCell className="hidden sm:table-cell">
                             <Badge variant={f.status === "available" ? "default" : "destructive"} className="text-xs">
                               {f.status}
                             </Badge>
                           </TableCell>
                           <TableCell className="text-right">
-                            <div className="flex items-center justify-end gap-1.5">
+                            <div className="flex items-center justify-end gap-1 sm:gap-1.5">
                               <Button
                                 size="sm"
                                 variant="outline"
-                                className="h-7 text-xs"
+                                className="h-7 text-xs px-2 sm:px-3"
                                 onClick={() => handleDownload(f.file_id, f.filename)}
                                 disabled={!connected || !!downloads[f.file_id]}
                               >
@@ -717,7 +735,7 @@ export default function NodeDashboard() {
                               <Button
                                 size="sm"
                                 variant={confirmDelete === f.file_id ? "destructive" : "ghost"}
-                                className="h-7 text-xs"
+                                className="h-7 text-xs px-2 sm:px-3"
                                 onClick={() => handleDelete(f.file_id, f.filename)}
                                 disabled={!connected || deleting === f.file_id}
                                 title={
@@ -761,7 +779,7 @@ export default function NodeDashboard() {
                       <TableRow>
                         <TableHead>Shard ID</TableHead>
                         <TableHead className="text-right">Size</TableHead>
-                        <TableHead>Checksum (SHA-256)</TableHead>
+                        <TableHead className="hidden sm:table-cell">Checksum (SHA-256)</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -769,7 +787,9 @@ export default function NodeDashboard() {
                         <TableRow key={s.shard_id}>
                           <TableCell className="font-mono text-xs">{s.shard_id}</TableCell>
                           <TableCell className="text-right text-xs text-muted-foreground">{bytes(s.size_bytes)}</TableCell>
-                          <TableCell className="font-mono text-xs text-muted-foreground">{s.sha256?.slice(0, 16)}…</TableCell>
+                          <TableCell className="font-mono text-xs text-muted-foreground hidden sm:table-cell">
+                            {s.sha256?.slice(0, 16)}…
+                          </TableCell>
                         </TableRow>
                       ))}
                       {shards.length === 0 && (
